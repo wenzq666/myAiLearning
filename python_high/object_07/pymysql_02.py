@@ -19,7 +19,7 @@ conn = pymysql.Connection(
 cur = conn.cursor()
 
 try:
-    # todo:1-开始事务
+    # 1-开始事务
     conn.begin()
     # 增加数据
     # sql = """insert into goods values (null,'iphone17','手机','苹果',6999,1,0);"""
@@ -28,12 +28,12 @@ try:
     # cur.execute(query="delete from goods where id=28;")
     # 更新数据
     cur.execute(query="update goods set price=6888 where id=24;")
-    # todo:2-提交事务
+    # 2-提交事务
     conn.commit()
 
 except Exception as e:
     print(e)
-    # todo:3-回滚事务
+    # 3-回滚事务
     conn.rollback()
 
 ############## 以下代码是演示事务的作用 ##############
