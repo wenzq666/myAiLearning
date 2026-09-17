@@ -1,0 +1,18 @@
+{
+  "decision": "accept",
+  "severity": "minor",
+  "reviewed_by": "independent final_pet_qa",
+  "failed_checks": [],
+  "review_warnings": [
+    "horizontal-7 B ambiguity at202.5",
+    "vertical-6 A ambiguity at315",
+    "vertical-7 A ambiguity at292.5",
+    "Two row-boundary continuity metric warnings"
+  ],
+  "evidence": [
+    "202.5 horizontal cue subtle in isolation, coherent down-left in order.",
+    "292.5 and315 upward components subtle; raised bill/head pitch supports up-left without reversal.",
+    "157.5->180 and337.5->000 modest drawing/registration differences; no conspicuous pop or broken silhouette.",
+    "Jumping stable-slots warning reviewed: coherent scale, visible lift/return, unclipped."
+  ]
+}

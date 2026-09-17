@@ -1,0 +1,23 @@
+{
+  "review": "E:\\itcast\\python\\code_play\\output\\pets\\silver-basketball\\qa\\review.json",
+  "direction_semantics": "E:\\itcast\\python\\code_play\\output\\pets\\silver-basketball\\qa\\direction-semantics.json",
+  "run_dir": "E:\\itcast\\python\\code_play\\output\\pets\\silver-basketball",
+  "prompt_set": "E:\\itcast\\python\\code_play\\output\\pets\\silver-basketball\\final\\prompt-set.md",
+  "contact_sheet": "E:\\itcast\\python\\code_play\\output\\pets\\silver-basketball\\qa\\contact-sheet-extended.png",
+  "generation_mode": "built-in image_gen",
+  "spriteVersionNumber": 2,
+  "archive": "E:\\itcast\\python\\code_play\\output\\pets\\silver-basketball\\final\\silver-basketball.zip",
+  "continuity": "E:\\itcast\\python\\code_play\\output\\pets\\silver-basketball\\qa\\look-continuity.json",
+  "chroma_despill": "E:\\itcast\\python\\code_play\\output\\pets\\silver-basketball\\qa\\chroma-despill-extended.json",
+  "blind_direction_validation": "E:\\itcast\\python\\code_play\\output\\pets\\silver-basketball\\qa\\direction-blind-validation.json",
+  "ok": true,
+  "displayName": "银发小篮球",
+  "sha256": "42BE762F1C80827DF2413CC4932C7222B90C1966D576F3278751756A0CE811E7",
+  "package": "C:\\Users\\wzq\\.codex\\pets\\silver-basketball",
+  "direction_sheet": "E:\\itcast\\python\\code_play\\output\\pets\\silver-basketball\\qa\\look-directions.png",
+  "spritesheet": "E:\\itcast\\python\\code_play\\output\\pets\\silver-basketball\\final\\spritesheet-extended.webp",
+  "visual_qa": "E:\\itcast\\python\\code_play\\output\\pets\\silver-basketball\\qa\\final-visual-qa.json",
+  "cleanup": "Auto-review rejected intermediate deletion; all intermediates retained. Pet package complete and installed.",
+  "validation": "E:\\itcast\\python\\code_play\\output\\pets\\silver-basketball\\final\\validation-extended.json",
+  "blind_review_resolution": "E:\\itcast\\python\\code_play\\output\\pets\\silver-basketball\\qa\\blind-review-resolution.json"
+}
