@@ -1,0 +1,140 @@
+{
+  "reviewer": "final_pet_qa",
+  "visual_qa": "pass",
+  "directions": {
+    "135": {
+      "verdict": "pass",
+      "expected": "down-right",
+      "observed": "down-right",
+      "reason": "Lowered gaze and right bill agree.",
+      "horizontal_evidence": "Bill/face right of hair-part axis.",
+      "vertical_evidence": "Low pupils and bowed bill near collar."
+    },
+    "180": {
+      "verdict": "pass",
+      "expected": "down",
+      "observed": "down",
+      "reason": "Symmetric bow and low pupils unmistakable.",
+      "horizontal_evidence": "Bill centered under hair part.",
+      "vertical_evidence": "Pupils at eye bottoms; bill just above collar."
+    },
+    "225": {
+      "verdict": "pass",
+      "expected": "down-left",
+      "observed": "down-left",
+      "reason": "Left facial projection with lowered gaze.",
+      "horizontal_evidence": "Bill left and pupils left.",
+      "vertical_evidence": "Pupils below centers; bill lowered."
+    },
+    "270": {
+      "verdict": "pass",
+      "expected": "left",
+      "observed": "left",
+      "reason": "Unmistakable screen-left cardinal.",
+      "horizontal_evidence": "Bill left of head center; pupils at left edges.",
+      "vertical_evidence": "Approximately level between neighbors."
+    },
+    "315": {
+      "verdict": "warning",
+      "expected": "up-left",
+      "observed": "up-left with subtle vertical component",
+      "reason": "Similar to292.5 but coherent toward337.5.",
+      "horizontal_evidence": "Bill and pupils clearly left.",
+      "vertical_evidence": "Raised bill and facial plane; pupil height less decisive."
+    },
+    "000": {
+      "verdict": "pass",
+      "expected": "up",
+      "observed": "up",
+      "reason": "Centered face pitches up.",
+      "horizontal_evidence": "Centered bill and balanced cheeks.",
+      "vertical_evidence": "Pupils high; bill/chin lifted from collar."
+    },
+    "022.5": {
+      "verdict": "pass",
+      "expected": "up-right",
+      "observed": "up-right",
+      "reason": "Raised face turns right.",
+      "horizontal_evidence": "Bill and pupils right of head center.",
+      "vertical_evidence": "High pupils and elevated chin."
+    },
+    "045": {
+      "verdict": "pass",
+      "expected": "up-right",
+      "observed": "up-right",
+      "reason": "Right facial projection and upper-right eyes.",
+      "horizontal_evidence": "Bill right; far eye compressed.",
+      "vertical_evidence": "High pupils; bill above level-right pose."
+    },
+    "067.5": {
+      "verdict": "pass",
+      "expected": "up-right",
+      "observed": "up-right",
+      "reason": "Strong right turn with readable small upward cue.",
+      "horizontal_evidence": "Bill at right contour; pupils right.",
+      "vertical_evidence": "Pupils above center; bill above 090."
+    },
+    "090": {
+      "verdict": "pass",
+      "expected": "right",
+      "observed": "right",
+      "reason": "Unmistakable screen-right cardinal.",
+      "horizontal_evidence": "Bill tip at right edge; pupils right.",
+      "vertical_evidence": "Approximately level between raised/lowered neighbors."
+    },
+    "112.5": {
+      "verdict": "pass",
+      "expected": "down-right",
+      "observed": "down-right",
+      "reason": "Right-facing head pitches down.",
+      "horizontal_evidence": "Bill and pupils remain right.",
+      "vertical_evidence": "Pupils lower; bill descends toward collar."
+    },
+    "157.5": {
+      "verdict": "pass",
+      "expected": "down-right",
+      "observed": "down-right",
+      "reason": "Deep down bow retains right cue.",
+      "horizontal_evidence": "Bill right of head center; pupils right.",
+      "vertical_evidence": "Low pupils, forehead dominant, bill near collar."
+    },
+    "202.5": {
+      "verdict": "warning",
+      "expected": "down-left",
+      "observed": "down-left with subtle horizontal component",
+      "reason": "Coherent between180 and225 despite blind horizontal ambiguity.",
+      "horizontal_evidence": "Bill/face slightly left of part; left cheek compressed.",
+      "vertical_evidence": "Low pupils and bill near collar."
+    },
+    "247.5": {
+      "verdict": "pass",
+      "expected": "down-left",
+      "observed": "down-left",
+      "reason": "Strong left turn retains modest down cue.",
+      "horizontal_evidence": "Bill near left contour; pupils left.",
+      "vertical_evidence": "Pupils lower-left; bill below270."
+    },
+    "292.5": {
+      "verdict": "warning",
+      "expected": "up-left",
+      "observed": "up-left with subtle vertical component",
+      "reason": "Raised pitch supports upward cue despite blind uncertainty.",
+      "horizontal_evidence": "Bill/pupils clearly left.",
+      "vertical_evidence": "Bill above270; chin lifted; pupil height weak cue."
+    },
+    "337.5": {
+      "verdict": "pass",
+      "expected": "up-left",
+      "observed": "up-left",
+      "reason": "Elevated face and upper-left pupils retain left cue.",
+      "horizontal_evidence": "Bill left of hair-part axis; pupils left.",
+      "vertical_evidence": "High pupils, raised bill and clear chin gap."
+    }
+  },
+  "review_warnings": [
+    "202.5 horizontal cue subtle in isolation, coherent down-left in order.",
+    "292.5 and315 upward components subtle; raised bill/head pitch supports up-left without reversal.",
+    "157.5->180 and337.5->000 modest drawing/registration differences; no conspicuous pop or broken silhouette.",
+    "Jumping stable-slots warning reviewed: coherent scale, visible lift/return, unclipped."
+  ]
+}

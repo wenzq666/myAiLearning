@@ -1,0 +1,5 @@
+{
+  "reviewer": "qa_standby",
+  "notes": "All nine rows pass. Jumping regenerated as shallow hop with head width ~136-140px consistent with ~140px in idle; clear arc and no size pop. Waiting distinct. Pre-despill fringe excluded.",
+  "visual_qa": "pass"
+}
