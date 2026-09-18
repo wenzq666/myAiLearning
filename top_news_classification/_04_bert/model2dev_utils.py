@@ -1,6 +1,10 @@
 import torch
 from sklearn.metrics import classification_report, f1_score, accuracy_score, precision_score, recall_score
 from tqdm import tqdm
+from  h2_bert_classifier_model import BertClassifier
+from config import Config
+from h1_dataloader_utils import build_dataloader
+
 
 def model2dev(model, data_loader, device):
     """
@@ -54,3 +58,20 @@ def model2dev(model, data_loader, device):
 
     # 6. 返回评估结果
     return report, accuracy, precision, recall, f1
+
+
+if __name__ == '__main__':
+    config = Config()
+
+    bert_model = BertClassifier()
+    # weights_only 避免模型文件的注入攻击
+    bert_model.load_state_dict(torch.load(config.model_save_path, map_location=config.device, weights_only=True))
+    bert_model.to(config.device)
+    # dataloader
+    _, test_dataloader, dev_dataloader = build_dataloader()
+    # 模型评估
+    report_test, accuracy_test, precision_test, recall_test, f1_test = model2dev(bert_model, test_dataloader, config.device)
+    print(f"测试集--准确率:{accuracy_test},精确率{precision_test},召回率{recall_test},f1值{f1_test}")
+
+    report_dev, accuracy_dev, precision_dev, recall_dev, f1_dev = model2dev(bert_model, dev_dataloader, config.device)
+    print(f"验证集--准确率:{accuracy_dev},精确率{precision_dev},召回率{recall_dev},f1值{f1_dev}")

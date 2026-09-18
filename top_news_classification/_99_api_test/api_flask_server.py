@@ -8,6 +8,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from _02_rf.rf_predict_fun import predict_fun as rf_fun
 from _03_fasttext.ft_predict_fun import predict_fun as ft_fun
+from _04_bert.h4_bert_predict_fun import predict_fun as bert_fun
 
 
 # 1. 创建App应用(对象)
@@ -42,6 +43,21 @@ def ft_predict():
     print(request_data)
     # 调用预测函数
     response = ft_fun(request_data)
+    print(response)
+
+    # 返回结果,
+    return response
+
+
+@app.route("/bert_predict", methods=['POST'])
+def bert_predict():
+    # 获取用户请求中的数据,
+    # "request" 是 Flask 提供的全局对象，包含了客户端发来的所有信息。
+    # get_json() 会把接收到的 JSON 数据自动转换成 Python 字典。
+    request_data = request.get_json()
+    print(request_data)
+    # 调用预测函数
+    response = bert_fun(request_data)
     print(response)
 
     # 返回结果,
