@@ -47,20 +47,3 @@ class Config(object):
 
 
         # 4. 训练参数配置.
-        self.num_classes = len(self.class_list)  # 类别数
-        self.num_epochs = 2  # epoch数
-        self.batch_size = 64  # mini-batch大小
-        self.pad_size = 32    # 每句话处理成的长度(短填长切)
-        self.learning_rate = 5e-5  # 学习率
-
-        # 5. 蒸馏模型存放地址
-        self.bert_model_distill_model_path_hard = self.root_path + "_06_bert_distill/save_models/bert_classifier_bilstm_model_hard.pt"  # 硬标签蒸馏模型训练结果保存路径
-        self.bert_model_distill_model_path_soft = self.root_path + "_06_bert_distill/save_models/bert_classifier_bilstm_model_soft.pt"  # 软标签蒸馏模型训练结果保存路径
-
-        # 6. bert模型蒸馏 -> BiLSTM模型的参数配置.
-        self.embed_size = 128
-        self.hidden_size_lstm = 256
-        self.lstm_learning_rate = 1e-3
-        self.dropout = 0.3
-        self.num_layers = 3
-        self.lstm_epochs = 10
