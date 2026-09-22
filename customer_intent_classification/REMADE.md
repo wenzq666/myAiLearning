@@ -1,350 +1,551 @@
-## 第一版直接用字符级 TF-IDF
-CIC
- ↓
-Char TF-IDF (1,2)
- ↓
+# 中文电商客服细粒度意图识别系统
+
+基于 **Label Semantic MacBERT** 的中文电商客服细粒度意图识别系统。
+
+项目围绕真实电商客服场景，完成从数据分析、Baseline、深度学习、预训练模型、数据质量治理、标签语义增强、错误分析、置信度校准、拒识机制到业务路由和可视化 Demo 的完整 NLP 工程流程。
+
+当前系统支持 **118 类细粒度电商客服意图识别**，并进一步将细粒度 Intent 映射至商品、订单、物流、售后等业务域。
+
+---
+
+## 1. 项目效果
+
+### Independent Test
+
+| Metric | Result |
+|---|---:|
+| Samples | 2000 |
+| Accuracy | **82.05%** |
+| Macro-F1 | **76.45%** |
+
+### Selective Prediction
+
+系统结合校准后的 Softmax Confidence 与 Top1-Top2 Margin，将预测划分为：
+
+- `accepted`：高置信度，可进入业务路由
+- `ambiguous`：Top1 / Top2 接近，需要澄清
+- `uncertain`：整体置信度不足，进入 fallback
+
+Independent Test 上：
+
+| Status | Coverage | Accuracy |
+|---|---:|---:|
+| accepted | **57.25%** | **94.85%** |
+| uncertain | 23.05% | 82.00% |
+| ambiguous | 19.70% | 44.92% |
+
+Accepted 样本 Macro-F1 为 **91.60%**。
+
+---
+
+## 2. 系统架构
+
+```text
+                      User Query
+                           │
+                           ▼
+                ┌─────────────────────┐
+                │ IntentClassifier    │
+                │ Label Semantic      │
+                │ MacBERT             │
+                └──────────┬──────────┘
+                           │
+                           ▼
+                 118-class Intent
+                           │
+                           ▼
+                Temperature Scaling
+                           │
+                           ▼
+                 Confidence + Margin
+                           │
+             ┌─────────────┼─────────────┐
+             ▼             ▼             ▼
+         accepted       ambiguous     uncertain
+             │             │             │
+             ▼             ▼             ▼
+           route         clarify       fallback
+             │
+             ▼
+                ┌─────────────────────┐
+                │    Intent Router    │
+                └──────────┬──────────┘
+                           │
+                           ▼
+                 Business Domain
+                           │
+       ┌───────────────────┼────────────────────┐
+       ▼                   ▼                    ▼
+     商品咨询            发货物流             退款售后
+     优惠活动            订单下单             支付
+     发票                会员账号             服务沟通
+                           │
+                           ▼
+                 Business Handler
+```
+
+当前项目聚焦于 **Intent Classification + Decision + Routing**。
+
+FAQ、RAG 和真实业务 API 暂未接入。
+
+---
+
+## 3. 模型演进
+
+项目没有直接使用单一 BERT 模型，而是按照由简单到复杂的方式逐步建立 Baseline 并进行优化。
+
+| Model | Accuracy | Macro-F1 | Dataset |
+|---|---:|---:|---|
+| TF-IDF + Logistic Regression | 62.40% | 43.33% | Dev |
+| TextCNN | 62.75% | 47.59% | Dev |
+| MacBERT | 66.65% | 49.77% | Dev |
+| Weighted MacBERT (Raw) | 64.10% | 50.76% | Dev |
+| Weighted MacBERT (Clean) | 64.20% | 51.69% | Dev |
+| **Label Semantic MacBERT** | **65.90%** | **52.92%** | Dev |
+| **Label Semantic MacBERT** | **82.05%** | **76.45%** | Independent Test |
+
+> Dev 与 Test 存在明显性能差异，可能与数据难度和分布差异有关，因此项目分别报告两套结果，不将其直接视为同分布性能提升。
+
+---
+
+## 4. 数据质量治理
+
+数据分析过程中发现：
+
+- 类别长尾分布
+- 强标签噪声
+- 局部类别污染
+- 细粒度 Intent 边界重叠
+- 多意图文本与单标签任务之间的冲突
+
+### OOF Noise Detection
+
+使用：
+
+```text
+5-Fold Stratified OOF
+        ↓
+Character TF-IDF
+        ↓
 Logistic Regression
+        ↓
+预测概率分析
+```
+
+强噪声候选筛选条件：
+
+```python
+pred_prob >= 0.70
+true_prob <= 0.10
+prob_gap >= 0.60
+```
+
+从 10,000 条 Train 数据中筛选出：
+
+```text
+112 条强标签噪声候选
+```
+
+经人工 Review 后对 112 条标签进行了修正，生成：
+
+```text
+data/processed/train_clean.csv
+```
+
+---
+
+## 5. Label Semantic MacBERT
+
+传统分类器将 Label 作为离散 ID：
+
+```text
+Text
  ↓
-训练集 TF-IDF: (10000, 21934)
-验证集 TF-IDF: (2000, 21934)
-===== Baseline Result =====
-Accuracy   0.6240
-Macro-F1   0.4333
-
-
-传统机器学习
-TF-IDF + LR
-Macro-F1 = 0.4333
-        ↓
-普通神经网络
-TextCNN
-Macro-F1 = 0.4759
-
-
-MacBERT 是改进的 BERT，它采用新颖的 MLM 作为校正预训练任务，从而减轻了预训练和微调之间的差异。
-我们不采用在微调阶段永远不会出现的 `[MASK]` 标记进行掩码，而是提出使用相似词进行掩码
-
-
-
 MacBERT
-Macro-F1  0.4977
+ ↓
+Linear
+ ↓
+118 Classes
+```
 
+本项目进一步利用数据集中的 `label_des`：
 
-原始 CIC 数据
-     │
-     ├── ① 基础数据清洗
-     │      空文本
-     │      完全重复
-     │      异常字符
-     │      多余空白
-     │
-     ├── ② 标签一致性检查   ← 非常重要
-     │      相同文本不同标签
-     │      疑似错标
-     │      标签语义冲突
-     │
-     └── ③ 长尾数据分析
-            极少样本类别
-            类别分布
-            类别语义重叠
+```text
+Text ───────→ MacBERT ───────→ Text Embedding
+                  │
+Label Description ┘
+                  ↓
+           Label Embedding
+                  ↓
+          Cosine Similarity
+```
 
+训练目标：
 
-先把这 10000 条训练数据的“脏”到底脏在哪里查出来，再决定哪些能自动清洗、哪些只能标记为疑似噪声。
+```text
+L =
+Weighted Classification CE
++
+0.2 × Semantic CE
+```
 
+使模型不仅学习：
 
-                 数据质量
-                    │
-          ┌─────────┴─────────┐
-          │                   │
-       结构问题             语义问题
-          │                   │
-      已检查 ✓          现在重点检查
-                              │
-                  ┌───────────┼───────────┐
-                  ↓           ↓           ↓
-               疑似错标    类别语义重叠   异常样本
+```text
+文本 → Label ID
+```
 
+同时学习：
 
-当前瓶颈不只是长尾，而是 118 个细粒度意图之间存在明显的语义边界重叠。
+```text
+文本语义 ↔ Intent 标签语义
+```
 
-粗粒度主题识别已经比较容易，主要错误集中于同一业务主题内部的细粒度意图区分。
+---
 
+## 6. Hard Negative Experiment
 
-CIC 的 Dev 集存在相当明显的语义级标签噪声
+错误分析发现：
 
-| 文本           | 数据标签    | 模型预测        |
-| ------------ | ------- | ----------- |
-| 我可以全是老客户了    | 商品推荐    | **是老顾客**    |
-| 我今天买顺丰27号能到吗 | 改运费     | **到货时间**    |
-| 我拍的是预售？      | 要重拍     | **是不是预售款**  |
-| 店家你好         | 已下单付款   | **打招呼**     |
-| 加钱发顺丰可以么？    | 补货时间    | **是否可以发顺丰** |
-| 没有刺鼻的味道吧？    | 能否定制    | **是否有味道**   |
-| 我把牛仔裤码数拍错了   | 偏远地区发货  | **拍错了**     |
-| 有好评返吗        | 退换货支持快递 | **好评返现**    |
-| 亲，质保多少时间     | 是否有赠品   | **质保多久**    |
+```text
+买家要求修改收件信息
+↔
+买家表示收件信息不需要修改了
+```
 
+Label Semantic 模型出现明显语义塌缩。
 
-我们现在分析 Dev，是为了发现数据集存在什么问题，而不是把 Dev 清洗后塞回 Train。
+因此设计 Targeted Hard Negative Loss：
 
-Train 10000
-     ↓
-检测疑似错标
-     ↓
-人工/规则审核
-     ↓
-clean_train
-     ↓
-重新训练
-     ↓
-仍然在原始 Dev 上评估
+```text
+L_hard =
+max(
+    0,
+    margin
+    - positive_score
+    + negative_score
+)
+```
 
+实验后该类别对混淆：
 
-OOF 标签噪声检测
+```text
+20 → 2
+```
 
+但同时出现其他类别边界漂移。
 
-                 Train 10000
-                     │
-              Stratified 5-Fold
-                     │
-       ┌─────────────┼─────────────┐
-       ↓             ↓             ↓
-     Fold1         Fold2         ...
-       │
-其他80%训练      其他80%训练
-       │             │
-预测没见过的20%   预测没见过的20%
-       └─────────────┬─────────────┘
-                     ↓
-             10000条 OOF 预测
-                     ↓
-          P(true) / P(pred)
-                     ↓
-                 prob_gap
-                     ↓
-              疑似错标排序
+最终结果：
 
+| Model | Accuracy | Macro-F1 |
+|---|---:|---:|
+| Label Semantic | 65.90% | 52.92% |
+| + Hard Negative | 65.45% | 53.05% |
 
-但 5 Fold × MacBERT 成本比较高。
-用 TF-IDF + Logistic Regression
+因此 Hard Negative 被保留为 **Ablation Experiment**，最终主模型仍采用 Label Semantic MacBERT。
 
-5-Fold
-TF-IDF + Logistic Regression
+---
+
+## 7. Probability Calibration
+
+使用 Temperature Scaling 对分类 Logits 进行校准：
+
+```text
+T = 0.9185
+```
+
+校准前：
+
+```text
+NLL = 2.1359
+ECE = 0.2001
+```
+
+校准后：
+
+```text
+NLL = 2.1054
+ECE = 0.1546
+```
+
+Temperature Scaling 不改变分类结果，只改善 Confidence 的可解释性。
+
+---
+
+## 8. Reject Policy
+
+最终决策规则：
+
+```python
+if confidence >= 0.50:
+    status = "accepted"
+
+elif margin < 0.15:
+    status = "ambiguous"
+
+else:
+    status = "uncertain"
+```
+
+其中：
+
+```text
+margin = Top1 Probability - Top2 Probability
+```
+
+系统因此不仅输出：
+
+```text
+Intent = 买家咨询物流信息
+```
+
+还可以输出：
+
+```text
+Intent      : 买家咨询物流信息
+Confidence  : 0.72
+Margin      : 0.51
+Status      : accepted
+Action      : route
+```
+
+---
+
+## 9. Intent Router
+
+118 个细粒度 Intent 进一步映射至业务域：
+
+```text
+PRODUCT       商品咨询
+PROMOTION     优惠活动
+ORDER         订单与下单
+PAYMENT       支付
+SHIPPING      发货物流
+AFTER_SALES   退款退换货
+INVOICE       发票
+MEMBER        会员与账号
+SERVICE       服务与沟通
+OTHER         其他
+```
+
+例如：
+
+```text
+用户：
+退款什么时候到账
+
         ↓
-10000 条 OOF probability
+
+Fine-grained Intent：
+买家咨询退款时间
+
         ↓
-疑似错标 Top N
 
+Business Domain：
+退款退换货
 
+        ↓
 
+Status：
+accepted
 
-结构清洗
-   ↓
-无缺失 / 无重复 / 无冲突
-   ↓
-TF-IDF + LR OOF
-   ↓
-低成本筛选疑似噪声
-   ↓
-MacBERT 辅助复核
-   ↓
-人工确认
-   ↓
-Clean Train
-   ↓
-重新训练 MacBERT
+        ↓
 
+Action：
+route
+```
 
-这比直接“删重复、去停用词”要有项目价值很多。
-这一阶段目标不是提高分类成绩，而是：
-10000 条 Train
-      ↓
-每条数据都由“没训练过它的模型”预测
-      ↓
-得到 P(true) / P(pred)
-      ↓
-计算 prob_gap
-      ↓
-筛选疑似错标 Train 样本
+---
 
+## 10. 项目结构
 
-这批里有大量高度疑似错标
-
-
-| sentence    | 原标签     | OOF预测      |   Gap |
-| ----------- | ------- | ---------- | ----: |
-| 有什么区区别      | 色差问题    | **商品区别**   | 0.969 |
-| 这个可以定制吗     | 分开/一起发货 | **能否定制**   | 0.927 |
-| 开发票！        | 换货发货时间  | **开发票**    | 0.920 |
-| 可定制字体？      | 是否可以改价  | **能否定制**   | 0.913 |
-| 发票帮我开       | 如何领取优惠券 | **开发票**    | 0.906 |
-| 可以指定发邮政快递吗？ | 商品尺寸    | **指定快递**   | 0.899 |
-| 改下地址        | 退换货地址   | **修改收件信息** | 0.880 |
-| 谢谢谢谢呜呜呜     | 取消退款    | **表达感谢**   | 0.867 |
-| 双十一有活动活动    | 打招呼     | **是否有活动**  | 0.820 |
-| 请问每袋虾净重是多少克 | 要求补偿    | **商品重量**   | 0.826 |
-
-
-CIC 当前数据问题
+```text
+customer_intent_classification/
 │
-├── 结构质量
-│   ├── Missing = 0
-│   ├── Empty = 0
-│   ├── Duplicate = 0
-│   └── Label Conflict = 0
+├── app.py
 │
-├── 类别分布
-│   └── 118 类 + 长尾
+├── data/
+│   ├── raw/
+│   ├── interim/
+│   └── processed/
 │
-└── 语义标签质量        ← 当前主要问题
-    ├── 明显疑似错标
-    ├── 相似意图边界
-    ├── 多意图文本
-    └── 上下文缺失
+├── models/
+│   └── bert/
+│
+├── src/
+│   ├── config.py
+│   │
+│   ├── data_process/
+│   │   ├── data_loader.py
+│   │   ├── data_analysis.py
+│   │   ├── data_cleaner.py
+│   │   ├── oof_noise_detector.py
+│   │   ├── review_noise_candidates.py
+│   │   └── build_clean_train.py
+│   │
+│   ├── dataset/
+│   │   ├── text_dataset.py
+│   │   └── macbert_dataset.py
+│   │
+│   ├── models/
+│   │   ├── tfidf_lr.py
+│   │   ├── textcnn.py
+│   │   └── label_semantic_macbert.py
+│   │
+│   ├── training/
+│   │   ├── train_textcnn.py
+│   │   ├── train_macbert.py
+│   │   ├── train_label_semantic_macbert.py
+│   │   └── train_label_semantic_hard_negative.py
+│   │
+│   ├── evaluation/
+│   │   ├── analyze_macbert_errors.py
+│   │   ├── analyze_intent_confusion.py
+│   │   ├── analyze_confidence.py
+│   │   ├── calibrate_temperature.py
+│   │   └── evaluate_test.py
+│   │
+│   ├── inference/
+│   │   └── intent_classifier.py
+│   │
+│   ├── router/
+│   │   └── intent_router.py
+│   │
+│   └── handlers/
+│       └── customer_service_handler.py
+│
+├── requirements.txt
+├── README.md
+└── .gitignore
+```
+
+---
+
+## 11. Quick Start
+
+### 安装依赖
+
+```bash
+pip install -r requirements.txt
+```
+
+### 启动 Demo
+
+在项目根目录执行：
+
+```bash
+streamlit run app.py
+```
+
+### 模型推理测试
+
+```bash
+python -m src.inference.intent_classifier
+```
+
+### Intent Router 测试
+
+```bash
+python -m src.router.intent_router
+```
+
+### Independent Test Evaluation
+
+```bash
+python -m src.evaluation.evaluate_test
+```
+
+---
+
+## 12. Demo
+
+### Chat Interface
+
+> 在此放置 Demo 截图
+
+```text
+docs/images/demo_chat.png
+```
+
+Demo 左侧提供客服聊天界面，右侧实时展示：
+
+- Fine-grained Intent
+- Business Domain
+- Confidence
+- Top1-Top2 Margin
+- Accepted / Ambiguous / Uncertain
+- Top-K Intent Prediction
+
+---
+
+## 13. Tech Stack
+
+```text
+Python
+PyTorch
+Transformers
+MacBERT
+scikit-learn
+pandas
+NumPy
+Streamlit
+```
+
+---
+
+## 14. Future Work
+
+当前项目已经完成 Intent Classification 与 Intent Routing。
+
+后续可以进一步扩展：
+
+```text
+Intent Classification
+        ↓
+Intent Router
+        ↓
+FAQ Retrieval
+        ↓
+RAG
+        ↓
+LLM Response Generation
+        ↓
+Business API / Human Handoff
+```
 
 
 
-===== 5-Fold OOF Result =====
-Samples          : 10000
-Accuracy         : 0.4683
-Macro-F1         : 0.3072
-Wrong Predictions: 5317
-Error Rate       : 0.5317
+## 15.System Architecture
 
-OOF Logistic Regression 没预测对 5317 条。
+```mermaid
+flowchart TD
 
+    A[用户咨询] --> B[Label Semantic MacBERT]
 
-模型能力不足
-+
-细粒度意图混淆
-+
-少数类识别困难
-+
-真正的标签噪声
+    B --> C[118类细粒度 Intent]
 
+    C --> D[Temperature Scaling]
 
-===== 5-Fold OOF Result =====
-Samples           : 10000
-Accuracy          : 0.4683
-Macro-F1          : 0.3072
-Wrong Predictions : 5317
-Error Rate        : 0.5317
+    D --> E[Confidence + Top1/Top2 Margin]
 
-===== Error Probability Statistics =====
-         true_prob    pred_prob     prob_gap
-count  5317.000000  5317.000000  5317.000000
-mean      0.023147     0.211994     0.188847
-std       0.031826     0.179744     0.184737
-min       0.000300     0.023166     0.000124
-50%       0.012056     0.148641     0.119466
-75%       0.027717     0.298966     0.279698
-90%       0.054754     0.481368     0.468404
-95%       0.080650     0.597285     0.586751
-99%       0.161299     0.776916     0.771761
-max       0.386083     0.970775     0.968971
+    E --> F{Decision}
 
-===== Strong Noise Candidates =====
-Candidate Samples : 112
+    F -->|Accepted| G[Route]
+    F -->|Ambiguous| H[Clarify]
+    F -->|Uncertain| I[Fallback]
 
-===== Top 30 Strong Noise Candidates =====
-     sentence      true_label_des      pred_label_des  true_prob  pred_prob  prob_gap  fold
-       有什么区区别         买家咨询商品的色差问题            买家咨询商品区别   0.001804   0.970775  0.968971     2
-      这个可以定制吗       买家咨询能否分开/一起发货            买家咨询能否定制   0.001073   0.928087  0.927014     3
-买一送一是半价还是买一送一          买家咨询商品规格数量            买家咨询活动规则   0.003146   0.928170  0.925024     3
-         开发票！          买家咨询换货发货时间 买家咨询能否开发票及发票类型和寄送时间   0.004999   0.925243  0.920244     5
-       可定制字体？          买家咨询是否可以改价            买家咨询能否定制   0.000879   0.913776  0.912897     5
- 不要发圆通快递和邮政快递           买家表达不满/生气        买家咨询是否可以指定快递   0.001536   0.910628  0.909092     4
-        有啥区别吗         买家表示优惠券无法使用            买家咨询商品区别   0.000572   0.907313  0.906742     1
-        发票帮我开         买家咨询如何领取优惠券 买家咨询能否开发票及发票类型和寄送时间   0.003235   0.908852  0.905617     2
-亲，可以指定发邮政快递吗？        买家咨询商品具体尺码尺寸        买家咨询是否可以指定快递   0.000418   0.899009  0.898591     3
-    送杯子不送勺子吗？            买家咨询哪款更好         买家咨询商品是否有赠品   0.000300   0.893986  0.893686     5
-     大小可以定制吗？ 买家咨询能否开发票及发票类型和寄送时间            买家咨询能否定制   0.002344   0.885965  0.883621     3
-         改下地址           买家咨询退换货地址          买家要求修改收件信息   0.004848   0.884660  0.879813     2
-     9天了，快点发货            买家咨询发货时间              买家催促发货   0.012174   0.891866  0.879692     5
-   这个可以定制戳戳绣吗        买家咨询商品的材质/面料            买家咨询能否定制   0.003380   0.875994  0.872614     3
-       我们申请退款            买家咨询退款时间          买家表示需要退货退款   0.011018   0.882484  0.871466     5
-      谢谢谢谢呜呜呜         买家要求取消退换货退款       买家表示麻烦卖家，表达感谢   0.001811   0.868968  0.867156     4
-       别都是一样的            买家咨询商品重量            买家咨询商品区别   0.002616   0.868670  0.866054     1
-    两种款式有什么区别         买家咨询商品的色差问题            买家咨询商品区别   0.004787   0.858370  0.853582     3
-价格不一样的都有些什么区别            买家咨询返现时间            买家咨询商品区别   0.001352   0.853207  0.851855     5
-      电压有什么区别            买家咨询返现时间            买家咨询商品区别   0.002571   0.848402  0.845831     2
-    请问尺寸可以定制不        买家咨询商品具体尺码尺寸            买家咨询能否定制   0.002583   0.846619  0.844036     1
-     袋子可以定制吗？          买家要求修改收件信息            买家咨询能否定制   0.002700   0.837262  0.834562     1
-      你们可以定制吗    买家咨询商品是否有质保，质保多久            买家咨询能否定制   0.000744   0.834180  0.833436     4
-    亲这款是买一送一吗         买家咨询退换货支持快递            买家咨询活动规则   0.000814   0.834104  0.833290     3
-  请问每袋虾净重是多少克              买家要求补偿            买家咨询商品重量   0.001686   0.827628  0.825942     5
-    这款是买一送一的吗           买家抱怨商品涨价了            买家咨询活动规则   0.003381   0.826793  0.823412     5
-     双十一有活动活动               买家打招呼           买家咨询是否有活动   0.000627   0.820208  0.819582     4
-      宽高可以定制吗          买家咨询是否可以改价            买家咨询能否定制   0.002278   0.820557  0.818278     5
-       能开发票哑巴         买家咨询如何领取优惠券 买家咨询能否开发票及发票类型和寄送时间   0.006198   0.824102  0.817904     4
-       就是买一送一              买家催促回复            买家咨询活动规则   0.000693   0.815379  0.814686     1
+    G --> J[Intent Router]
 
+    J --> K[商品咨询]
+    J --> L[优惠活动]
+    J --> M[订单与下单]
+    J --> N[支付]
+    J --> O[发货物流]
+    J --> P[退款退换货]
+    J --> Q[发票]
+    J --> R[会员与账号]
+    J --> S[服务与沟通]
 
-这个结果很好，112 条这个规模很合适。说明我们设置的严格阈值把 5317 个 OOF 错误压缩到了约 1.12% 的训练集，已经进入可以人工审核的范围。
-
-开发票！ → 原标签：换货发货时间 → OOF：开发票
-双十一有活动活动 → 原标签：打招呼 → OOF：是否有活动
-请问每袋虾净重是多少克 → 原标签：要求补偿 → OOF：商品重量
-
-人工审核
-
-原始 CIC
-   ↓
-EDA
-   ├── 类别不均衡
-   └── 细粒度意图
-   ↓
-Baseline Error Analysis
-   ↓
-发现疑似语义错标
-   ↓
-5-Fold OOF
-   ↓
-10000 条训练数据独立预测
-   ↓
-严格阈值筛选
-   ↓
-112 条 Strong Noise Candidates
-   ↓
-人工审核
-   ↓
-Relabel
-   ↓
-Clean Train
-   ↓
-Raw / Clean Controlled Experiment
-   ↓
-Macro-F1
-0.5076 → 0.5169
-
-
-
-
-对这 118 个标签做混淆结构分析，找出真正最难区分的意图组
-
-
-哪些意图对是真正最难区分的？它们占了多少错误？
-
-
-===== 最难识别的 20 个类别 =====
-    label_des  support  correct  errors  class_accuracy
-   买家咨询是否可以拒收        8        0       8        0.000000
-   买家表示无法申请退款        6        0       6        0.000000
-     买家咨询哪款更好        6        0       6        0.000000
-   买家咨询赠品何时发货        6        0       6        0.000000
-   买家要求核对订单信息        5        0       5        0.000000
-     买家发送开票信息        4        0       4        0.000000
-   买家咨询是否有买家秀        4        0       4        0.000000
- 买家咨询能否提前享受优惠        3        0       3        0.000000
-   买家咨询如何加入会员        3        0       3        0.000000
-   买家咨询什么颜色好看        3        0       3        0.000000
-  买家咨询自己的旺旺昵称        3        0       3        0.000000
-   买家表示商家发错地址        2        0       2        0.000000
-买家咨询退货退款原因选什么        2        0       2        0.000000
- 买家咨询赠品是否可以自选        2        0       2        0.000000
-   买家咨询是否有实体店        1        0       1        0.000000
-     买家表示伤心难过        7        1       6        0.142857
-      买家发送结束语        7        1       6        0.142857
-     买家要求发货检查        6        1       5        0.166667
-  买家表示具体时间寄回去       10        2       8        0.200000
-   买家咨询商品上新时间        5        1       4        0.200000
+    H --> T[用户澄清]
+    I --> U[后续 FAQ / RAG / 人工客服]
+```

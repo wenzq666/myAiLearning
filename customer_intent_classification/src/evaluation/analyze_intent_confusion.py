@@ -19,7 +19,31 @@ config = Config()
 
 
 # =========================================================
-# 1. 加载模型并预测 Dev
+# 1. 加载 Clean Train
+# =========================================================
+
+def load_clean_train():
+
+    clean_path = (
+        config.PROCESSED_DATA_DIR
+        + "/train_clean.csv"
+    )
+
+    if not os.path.exists(clean_path):
+
+        raise FileNotFoundError(
+            f"找不到 Clean Train：{clean_path}"
+        )
+
+    train_df = pd.read_csv(
+        clean_path
+    )
+
+    return train_df
+
+
+# =========================================================
+# 2. 加载模型并预测 Dev
 # =========================================================
 
 def predict_dev():
@@ -27,12 +51,20 @@ def predict_dev():
     device = config.device
 
     # -----------------------------------------------------
-    # 加载原始数据
+    # Clean Train
     #
+    # 用于：
+    # 1. 统计训练集类别数量
+    # 2. 创建 DataLoader
+    # -----------------------------------------------------
+
+    train_df = load_clean_train()
+
+    # -----------------------------------------------------
     # Dev 始终使用原始 Dev
     # -----------------------------------------------------
 
-    train_df, dev_df, _ = load_cic_dataset()
+    _, dev_df, _ = load_cic_dataset()
 
     dev_df = (
         dev_df
@@ -49,9 +81,22 @@ def predict_dev():
         int(dev_df["label"].max())
     ) + 1
 
+    print(
+        f"Train Samples : {len(train_df)}"
+    )
+
+    print(
+        f"Dev Samples   : {len(dev_df)}"
+    )
+
+    print(
+        f"Num Classes   : {num_classes}"
+    )
+
     # -----------------------------------------------------
     # 创建 DataLoader
     #
+    # train_loader 不使用
     # 这里只需要 dev_loader
     # -----------------------------------------------------
 
@@ -67,7 +112,7 @@ def predict_dev():
     # -----------------------------------------------------
     # 创建模型
     #
-    # 和 train_macbert.py 保持一致
+    # 与 train_macbert.py 保持一致
     # -----------------------------------------------------
 
     model = (
@@ -79,7 +124,7 @@ def predict_dev():
     )
 
     # -----------------------------------------------------
-    # 加载 Clean Weighted MacBERT
+    # Clean Weighted MacBERT 模型
     # -----------------------------------------------------
 
     model_path = (
@@ -92,6 +137,14 @@ def predict_dev():
         raise FileNotFoundError(
             f"找不到模型：{model_path}"
         )
+
+    print(
+        f"Model Path    : {model_path}"
+    )
+
+    # -----------------------------------------------------
+    # 加载模型参数
+    # -----------------------------------------------------
 
     state_dict = torch.load(
         model_path,
@@ -107,7 +160,7 @@ def predict_dev():
     model.eval()
 
     # -----------------------------------------------------
-    # 预测
+    # Dev Prediction
     # -----------------------------------------------------
 
     predictions = []
@@ -143,37 +196,79 @@ def predict_dev():
             )
 
     # -----------------------------------------------------
-    # 保存预测结果
+    # 保存预测标签
     # -----------------------------------------------------
 
-    dev_df["pred_label"] = predictions
+    dev_df[
+        "pred_label"
+    ] = predictions
 
-    return dev_df
+    return (
+        train_df,
+        dev_df
+    )
 
 
 # =========================================================
-# 2. 构建 Label Mapping
+# 3. Label Mapping
 # =========================================================
 
-def build_label_mapping(dev_df):
+def build_label_mapping(
+        train_df,
+        dev_df
+):
 
-    label_mapping = (
+    # -----------------------------------------------------
+    # Train + Dev 一起构建 mapping
+    #
+    # 防止某些 label 只出现在其中一个数据集
+    # -----------------------------------------------------
+
+    train_mapping = (
+        train_df[
+            [
+                "label",
+                "label_des"
+            ]
+        ]
+    )
+
+    dev_mapping = (
         dev_df[
             [
                 "label",
                 "label_des"
             ]
         ]
-        .drop_duplicates()
-        .set_index("label")["label_des"]
-        .to_dict()
+    )
+
+    mapping_df = pd.concat(
+        [
+            train_mapping,
+            dev_mapping
+        ],
+        ignore_index=True
+    )
+
+    mapping_df = (
+        mapping_df
+        .drop_duplicates(
+            subset=["label"]
+        )
+    )
+
+    label_mapping = dict(
+        zip(
+            mapping_df["label"],
+            mapping_df["label_des"]
+        )
     )
 
     return label_mapping
 
 
 # =========================================================
-# 3. 单向混淆分析
+# 4. 单向混淆分析
 #
 # 例如：
 #
@@ -192,7 +287,7 @@ def analyze_directional_confusion(
 ):
 
     # -----------------------------------------------------
-    # 只保留预测错误的数据
+    # 只保留预测错误
     # -----------------------------------------------------
 
     error_df = dev_df[
@@ -223,7 +318,7 @@ def analyze_directional_confusion(
     )
 
     # -----------------------------------------------------
-    # 标签描述
+    # Label Description
     # -----------------------------------------------------
 
     confusion_df[
@@ -241,10 +336,10 @@ def analyze_directional_confusion(
     )
 
     # -----------------------------------------------------
-    # 每个真实类别的 Dev 样本数
+    # Dev Support
     # -----------------------------------------------------
 
-    support_dict = (
+    dev_support_dict = (
         dev_df["label"]
         .value_counts()
         .to_dict()
@@ -254,15 +349,17 @@ def analyze_directional_confusion(
         "true_support"
     ] = (
         confusion_df["label"]
-        .map(support_dict)
+        .map(dev_support_dict)
     )
 
     # -----------------------------------------------------
-    # 混淆比例
+    # Confusion Rate
     #
-    # 例如：
+    # 比如：
     #
-    # 发货时间一共 40 条
+    # 发货时间：
+    #
+    # Dev = 40
     #
     # 其中 8 条预测成催促发货
     #
@@ -288,7 +385,10 @@ def analyze_directional_confusion(
                 "count",
                 "confusion_rate"
             ],
-            ascending=False
+            ascending=[
+                False,
+                False
+            ]
         )
         .reset_index(drop=True)
     )
@@ -297,14 +397,13 @@ def analyze_directional_confusion(
 
 
 # =========================================================
-# 4. 双向混淆分析
-#
-# 把：
+# 5. 双向混淆分析
 #
 # A -> B
+#
 # B -> A
 #
-# 合并为：
+# 合并：
 #
 # A <-> B
 # =========================================================
@@ -331,14 +430,12 @@ def analyze_bidirectional_confusion(
         )
 
         # -------------------------------------------------
-        # 小 label 放前面
-        #
         # 保证：
         #
-        # (10, 20)
-        # (20, 10)
+        # 10 -> 20
+        # 20 -> 10
         #
-        # 最终都是：
+        # 都归到：
         #
         # (10, 20)
         # -------------------------------------------------
@@ -378,7 +475,7 @@ def analyze_bidirectional_confusion(
             }
 
         # -------------------------------------------------
-        # 判断方向
+        # A -> B
         # -------------------------------------------------
 
         if (
@@ -393,6 +490,10 @@ def analyze_bidirectional_confusion(
                 "a_to_b"
             ] += count
 
+        # -------------------------------------------------
+        # B -> A
+        # -------------------------------------------------
+
         else:
 
             pair_records[
@@ -402,7 +503,7 @@ def analyze_bidirectional_confusion(
             ] += count
 
     # -----------------------------------------------------
-    # 转 DataFrame
+    # DataFrame
     # -----------------------------------------------------
 
     pair_df = pd.DataFrame(
@@ -424,7 +525,7 @@ def analyze_bidirectional_confusion(
     )
 
     # -----------------------------------------------------
-    # 标签描述
+    # Label Description
     # -----------------------------------------------------
 
     pair_df[
@@ -458,19 +559,43 @@ def analyze_bidirectional_confusion(
 
 
 # =========================================================
-# 5. 每个类别识别情况
+# 6. 每个类别的表现
+#
+# 新增：
+#
+# train_support
+# dev_support
 # =========================================================
 
 def analyze_class_performance(
+        train_df,
         dev_df,
         label_mapping
 ):
+
+    # -----------------------------------------------------
+    # Train Support
+    # -----------------------------------------------------
+
+    train_support_dict = (
+        train_df["label"]
+        .value_counts()
+        .to_dict()
+    )
+
+    # -----------------------------------------------------
+    # Dev 中出现的所有 label
+    # -----------------------------------------------------
 
     labels = sorted(
         dev_df["label"]
         .unique()
         .tolist()
     )
+
+    # -----------------------------------------------------
+    # Confusion Matrix
+    # -----------------------------------------------------
 
     matrix = confusion_matrix(
         dev_df["label"],
@@ -483,15 +608,26 @@ def analyze_class_performance(
     for index, label in enumerate(labels):
 
         # -------------------------------------------------
-        # 当前类别总样本
+        # Train Support
         # -------------------------------------------------
 
-        support = int(
+        train_support = int(
+            train_support_dict.get(
+                label,
+                0
+            )
+        )
+
+        # -------------------------------------------------
+        # Dev Support
+        # -------------------------------------------------
+
+        dev_support = int(
             matrix[index].sum()
         )
 
         # -------------------------------------------------
-        # 正确预测数量
+        # Correct
         # -------------------------------------------------
 
         correct = int(
@@ -499,30 +635,34 @@ def analyze_class_performance(
         )
 
         # -------------------------------------------------
-        # 错误数量
+        # Errors
         # -------------------------------------------------
 
         errors = (
-            support
+            dev_support
             -
             correct
         )
 
         # -------------------------------------------------
-        # 当前类别准确率
+        # Class Accuracy
         # -------------------------------------------------
 
-        if support > 0:
+        if dev_support > 0:
 
             class_accuracy = (
                 correct
                 /
-                support
+                dev_support
             )
 
         else:
 
             class_accuracy = 0.0
+
+        # -------------------------------------------------
+        # Record
+        # -------------------------------------------------
 
         records.append(
             {
@@ -536,8 +676,11 @@ def analyze_class_performance(
                         str(label)
                     ),
 
-                "support":
-                    support,
+                "train_support":
+                    train_support,
+
+                "dev_support":
+                    dev_support,
 
                 "correct":
                     correct,
@@ -555,7 +698,11 @@ def analyze_class_performance(
     )
 
     # -----------------------------------------------------
-    # 准确率最低的类别放前面
+    # 准确率低的排前面
+    #
+    # 同样准确率：
+    #
+    # Dev 样本多的排前面
     # -----------------------------------------------------
 
     class_df = (
@@ -563,7 +710,7 @@ def analyze_class_performance(
         .sort_values(
             by=[
                 "class_accuracy",
-                "support"
+                "dev_support"
             ],
             ascending=[
                 True,
@@ -577,20 +724,22 @@ def analyze_class_performance(
 
 
 # =========================================================
-# 6. Main
+# 7. Main
 # =========================================================
 
 def main():
 
     print(
-        "正在使用 Clean Weighted MacBERT 预测 Dev..."
+        "\n正在分析 Clean Weighted MacBERT..."
     )
 
     # =====================================================
-    # 预测
+    # Prediction
     # =====================================================
 
-    dev_df = predict_dev()
+    train_df, dev_df = (
+        predict_dev()
+    )
 
     # =====================================================
     # Label Mapping
@@ -598,22 +747,25 @@ def main():
 
     label_mapping = (
         build_label_mapping(
+            train_df,
             dev_df
         )
     )
 
     # =====================================================
-    # Dev 总体错误
+    # Dev Error Summary
     # =====================================================
 
     total_samples = len(
         dev_df
     )
 
-    error_samples = (
-        dev_df["label"]
-        != dev_df["pred_label"]
-    ).sum()
+    error_samples = int(
+        (
+            dev_df["label"]
+            != dev_df["pred_label"]
+        ).sum()
+    )
 
     error_rate = (
         error_samples
@@ -638,7 +790,7 @@ def main():
     )
 
     # =====================================================
-    # 单向混淆
+    # Directional Confusion
     # =====================================================
 
     directional_df = (
@@ -649,7 +801,7 @@ def main():
     )
 
     # =====================================================
-    # 双向混淆
+    # Bidirectional Confusion
     # =====================================================
 
     bidirectional_df = (
@@ -660,23 +812,39 @@ def main():
     )
 
     # =====================================================
-    # 类别表现
+    # Class Performance
     # =====================================================
 
     class_df = (
         analyze_class_performance(
+            train_df,
             dev_df,
             label_mapping
         )
     )
 
     # =====================================================
-    # 保存目录
+    # 创建输出目录
     # =====================================================
 
     os.makedirs(
         config.INTERIM_DATA_DIR,
         exist_ok=True
+    )
+
+    # =====================================================
+    # 保存预测结果
+    # =====================================================
+
+    prediction_path = (
+        config.INTERIM_DATA_DIR
+        + "/clean_macbert_dev_predictions.csv"
+    )
+
+    dev_df.to_csv(
+        prediction_path,
+        index=False,
+        encoding="utf-8-sig"
     )
 
     # =====================================================
@@ -710,7 +878,7 @@ def main():
     )
 
     # =====================================================
-    # 保存类别表现
+    # 保存 Class Performance
     # =====================================================
 
     class_path = (
@@ -725,7 +893,7 @@ def main():
     )
 
     # =====================================================
-    # 输出 Top 20 双向混淆
+    # Top 20 双向混淆
     # =====================================================
 
     print(
@@ -749,7 +917,9 @@ def main():
     )
 
     # =====================================================
-    # 输出最难识别类别
+    # 最难识别的 20 个类别
+    #
+    # 这次增加 train_support
     # =====================================================
 
     print(
@@ -760,7 +930,8 @@ def main():
         class_df[
             [
                 "label_des",
-                "support",
+                "train_support",
+                "dev_support",
                 "correct",
                 "errors",
                 "class_accuracy"
@@ -773,11 +944,15 @@ def main():
     )
 
     # =====================================================
-    # 输出文件位置
+    # 输出文件
     # =====================================================
 
     print(
         "\n===== Saved ====="
+    )
+
+    print(
+        prediction_path
     )
 
     print(
